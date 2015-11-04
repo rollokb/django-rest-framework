@@ -48,9 +48,8 @@ class PKOnlyObject(object):
 # rather than the parent serializer.
 MANY_RELATION_KWARGS = (
     'read_only', 'write_only', 'required', 'default', 'initial', 'source',
-    'label', 'help_text', 'style', 'error_messages', 'allow_empty'
+    'label', 'help_text', 'style', 'error_messages', 'allow_empty', 'relation_method',
 )
-
 
 class RelatedField(Field):
     queryset = None
@@ -71,6 +70,7 @@ class RelatedField(Field):
         )
         kwargs.pop('many', None)
         kwargs.pop('allow_empty', None)
+        kwargs.pop('relation_method', None)
         super(RelatedField, self).__init__(**kwargs)
 
     def __new__(cls, *args, **kwargs):
@@ -428,6 +428,7 @@ class ManyRelatedField(Field):
 
     def __init__(self, child_relation=None, *args, **kwargs):
         self.child_relation = child_relation
+        self.relation_method = kwargs.pop('relation_method', 'all')
         self.allow_empty = kwargs.pop('allow_empty', True)
         self.html_cutoff = kwargs.pop('html_cutoff', self.html_cutoff)
         self.html_cutoff_text = kwargs.pop('html_cutoff_text', self.html_cutoff_text)
@@ -465,7 +466,13 @@ class ManyRelatedField(Field):
             return []
 
         relationship = get_attribute(instance, self.source_attrs)
-        return relationship.all() if (hasattr(relationship, 'all')) else relationship
+        bound_relation_method = getattr(relationship, self.relation_method, None)
+
+        assert bound_relation_method is not None, (
+            "`relation_method` must exist on the manager object"
+        )
+
+        return bound_relation_method() if bound_relation_method is not None else relationship
 
     def to_representation(self, iterable):
         return [
